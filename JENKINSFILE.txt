@@ -1,0 +1,55 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Get Code') {
+            steps {
+                echo 'Traemos el codigo del repo'
+                //Obtener codigo del repositorio 
+                git 'https://github.com/dagomezar/helloworld.git' 
+                bat 'dir'
+                echo WORKSPACE
+              }  
+            }
+        stage('Build') {
+            steps {
+                echo 'Nada por aqui, no hay que compilar...'
+            }
+        }
+
+        stage('Tests') {
+            parallel {
+                    stage('Unit') {
+                        steps {
+                            bat '''
+                            set PYTHONPATH=%WORKSPACE%
+							echo %WORKSPACE%
+                            pytest --junitxml=result-unit.xml test\\unit
+                            '''
+                        }
+                    }
+                    stage('Rest') {
+                        steps {
+                            catchError(buildResult: 'UNESTABLE', stageResult: 'FAILURE' )
+                                {
+                                    bat '''
+                                    set FLASH_APP=app\\api.py
+                                    set FLASK_ENV=development
+									echo %FLASK_ENV%
+                                    start flask run
+                                    start java -jar C:\\UNIR\\WireMock\\wiremock-standalone-3.13.0.jar --port 9090 --root-dir C:\\UNIR\\WireMock
+                                    set PYTHONPATH=%WORKSPACE%
+                                    pytest --junitxml=result-rest.xml test\\rest
+                                    ''' 
+                                }
+                        }
+                    }
+					stage('Results') {
+					   steps{
+						   junit 'result*.xml'
+						 }
+					   }
+            }
+        }
+    }
+}
